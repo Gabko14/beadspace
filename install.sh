@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Beadspace installer
+# Beadspace installer (v2 fork)
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/cameronsjo/beadspace/main/install.sh | bash
+#   curl -sL https://raw.githubusercontent.com/Gabko14/beadspace/main/install.sh | bash
 #   BEADSPACE_DIR=custom/path curl -sL ... | bash
 #   ./install.sh [target-dir]
 
-VERSION="v1"
-REPO_RAW="https://raw.githubusercontent.com/cameronsjo/beadspace/main"
+VERSION="v2"
+REPO_RAW="https://raw.githubusercontent.com/Gabko14/beadspace/main"
 TARGET="${BEADSPACE_DIR:-${1:-.beadspace}}"
 
 # --- Preconditions ---
@@ -57,20 +57,32 @@ sed -i.bak \
     "${PROJECT_ROOT}/.github/workflows/beadspace.yml"
 rm -f "${PROJECT_ROOT}/.github/workflows/beadspace.yml.bak"
 
-# --- Generate issues.json ---
+# --- Generate data files ---
 
 ISSUE_COUNT=0
 JSONL="${PROJECT_ROOT}/.beads/issues.jsonl"
 
 if [ -f "${JSONL}" ]; then
     ISSUE_COUNT=$(python3 -c "
-import json, sys
-issues = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
-json.dump(issues, open(sys.argv[2], 'w'))
-print(len(issues))
+import json, sys, os
+
+def convert(src, dst):
+    if not os.path.exists(src):
+        json.dump([], open(dst, 'w'))
+        return 0
+    data = [json.loads(l) for l in open(src) if l.strip()]
+    json.dump(data, open(dst, 'w'))
+    return len(data)
+
+count = convert(sys.argv[1], sys.argv[2])
+convert(os.path.join(os.path.dirname(sys.argv[1]), 'backup', 'dependencies.jsonl'), os.path.join(os.path.dirname(sys.argv[2]), 'deps.json'))
+convert(os.path.join(os.path.dirname(sys.argv[1]), 'backup', 'events.jsonl'), os.path.join(os.path.dirname(sys.argv[2]), 'events.json'))
+print(count)
 " "${JSONL}" "${TARGET_ABS}/issues.json")
 else
     echo "[]" > "${TARGET_ABS}/issues.json"
+    echo "[]" > "${TARGET_ABS}/deps.json"
+    echo "[]" > "${TARGET_ABS}/events.json"
 fi
 
 # --- Write version ---
@@ -96,6 +108,8 @@ fi
 echo "  Created ${TARGET}/index.html"
 echo "  Created .github/workflows/beadspace.yml"
 echo "  Generated ${TARGET}/issues.json (${ISSUE_COUNT} issues)"
+echo "  Generated ${TARGET}/deps.json (dependencies)"
+echo "  Generated ${TARGET}/events.json (events)"
 echo ""
 echo "Next steps:"
 echo "  git add ${TARGET} .github/workflows/beadspace.yml"
